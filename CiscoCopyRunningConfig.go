@@ -22,8 +22,9 @@ import (
 )
 
 var (
-	jsFile = flag.String("f", "1", "File in same dir")
-	toEnc  = flag.String("e", "1", "To encrypt in same dir")
+	jsFile = flag.String("f", "", "Encrypted file in the same dir")
+	toEnc  = flag.String("e", "", "File to encrypt in the same dir")
+	help   = flag.Bool("h", false, "Get help")
 )
 
 // Commutators
@@ -150,7 +151,13 @@ func invokeCmdSSH(host string, port int, user string, password string) (string, 
 
 func main() {
 	flag.Parse()
-	if *toEnc != "1" {
+
+	if *help {
+		fmt.Println("json:Name,Port,User,Password; file must be uncrypted only; the depth of backup unlim, control it")
+		return
+	}
+
+	if *toEnc != "" {
 		encryptedName := "enc_" + *toEnc
 		forEnc, err := ioutil.ReadFile(*toEnc)
 		if err != nil {
@@ -159,16 +166,18 @@ func main() {
 		encryptFile(encryptedName, forEnc, passphrase)
 		return
 	}
-	hosts, err := getCommutators(*jsFile)
-	if err != nil {
-		log.Fatal("unable get commutators: ", err)
-		return
-	}
-	for _, commutator := range hosts {
-		out, err := invokeCmdSSH(commutator.Name, commutator.Port, commutator.User, commutator.Password)
+	if *jsFile != "" {
+		hosts, err := getCommutators(*jsFile)
 		if err != nil {
-			log.Fatal(commutator.Name, err)
+			log.Fatal("unable get commutators: ", err)
+			return
 		}
-		log.Println(commutator.Name, out)
+		for _, commutator := range hosts {
+			out, err := invokeCmdSSH(commutator.Name, commutator.Port, commutator.User, commutator.Password)
+			if err != nil {
+				log.Fatal(commutator.Name, err)
+			}
+			log.Println(commutator.Name, out)
+		}
 	}
 }
