@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"time"
 
 	// go install "golang.org/x/crypto/ssh"
 	// go get "golang.org/x/crypto/ssh"
@@ -24,6 +25,7 @@ import (
 var (
 	jsFile = flag.String("f", "", "Encrypted file in the same dir")
 	toEnc  = flag.String("e", "", "File to encrypt in the same dir")
+	backup = flag.Bool("b", false, "Move to Backup folder")
 	help   = flag.Bool("h", false, "Get help")
 )
 
@@ -36,6 +38,55 @@ type Commutators []struct {
 }
 
 var passphrase string = "XXXYYYYZZZ"
+
+func getBackupFolder(rootFolder string) error {
+	entities, err := ioutil.ReadDir(rootFolder)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, entity := range entities {
+		if entity.IsDir() {
+			if entity.Name() == "Backup" {
+				log.Println(entity.Name() + " folder exist")
+				return nil
+			}
+		}
+	}
+	err = os.Mkdir("Backup", 0755)
+	if err != nil {
+		log.Fatal("Backup folder creation error: ", err)
+		return err
+	}
+	log.Println("Backup folder created")
+	return nil
+}
+
+func moveToBackupAndCreate(rootFolder string) error {
+	entities, err := ioutil.ReadDir(rootFolder)
+	todayDate := time.Now()
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, entity := range entities {
+		if entity.IsDir() {
+			if entity.Name() != "Backup" {
+				fmt.Println(todayDate.Format("01-02-2006"))
+				err := os.Rename(entity.Name(), "./Backup/"+todayDate.Format("01-02-2006")+"_"+entity.Name())
+				if err != nil {
+					log.Println(entity.Name()+" rename and move err: ", err)
+					err := os.Rename(entity.Name(), "./Backup/"+todayDate.Format("01-02-2006")+"_"+entity.Name()+"-1")
+					if err != nil {
+						log.Fatal(entity.Name()+" rename and move err: ", err)
+						return err
+					}
+				}
+				os.Mkdir(entity.Name(), 0755)
+				log.Println(entity.Name() + " renamed and moved to Backup")
+			}
+		}
+	}
+	return nil
+}
 
 func createHash(key string) string {
 	hasher := md5.New()
@@ -153,10 +204,10 @@ func main() {
 	flag.Parse()
 
 	if *help {
-		fmt.Println("json:Name,Port,User,Password; file must be uncrypted only; the depth of backup unlim, control it")
+		fmt.Println("json:Name,Port,User,Password; file must be uncrypted only; the depth of backup unlim, control it; no run more then twice per day or not use flag -b")
 		return
 	}
-
+	// File encryption only
 	if *toEnc != "" {
 		encryptedName := "enc_" + *toEnc
 		forEnc, err := ioutil.ReadFile(*toEnc)
@@ -166,6 +217,14 @@ func main() {
 		encryptFile(encryptedName, forEnc, passphrase)
 		return
 	}
+
+	//move to Backup folder
+	if *backup {
+		getBackupFolder("./")
+		moveToBackupAndCreate("./")
+	}
+
+	// processed command in ssh
 	if *jsFile != "" {
 		hosts, err := getCommutators(*jsFile)
 		if err != nil {
@@ -173,6 +232,12 @@ func main() {
 			return
 		}
 		for _, commutator := range hosts {
+			if _, err := os.Stat(commutator.Name); os.IsNotExist(err) {
+				err := os.Mkdir(commutator.Name, 0755)
+				if err != nil {
+					log.Println(commutator.Name+" dircreation error: ", err)
+				}
+			}
 			out, err := invokeCmdSSH(commutator.Name, commutator.Port, commutator.User, commutator.Password)
 			if err != nil {
 				log.Fatal(commutator.Name, err)
