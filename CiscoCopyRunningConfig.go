@@ -33,11 +33,12 @@ var (
 type Commutators []struct {
 	Name     string `json:"Name"`
 	Port     int    `json:"Port"`
+	Ftp      string `json:"Ftp"`
 	User     string `json:"User"`
 	Password string `json:"Password"`
 }
 
-var passphrase string = "XXXYYYYZZZ"
+var passphrase string = "XXXYYYZZZ"
 
 func getBackupFolder(rootFolder string) error {
 	entities, err := ioutil.ReadDir(rootFolder)
@@ -164,7 +165,7 @@ func getCommutators(jsFile string) (Commutators, error) {
 	return CommFile, nil
 }
 
-func invokeCmdSSH(host string, port int, user string, password string) (string, error) {
+func invokeCmdSSH(host string, port int, ftp string, user string, password string) (string, error) {
 	config := &ssh.ClientConfig{
 		User:            user,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
@@ -189,7 +190,8 @@ func invokeCmdSSH(host string, port int, user string, password string) (string, 
 	}
 	defer session.Close()
 
-	outputString := "copy running-config tftp://10.11.9.2/data/" + host + "/" + host + " vrf management"
+	// tftp://10.11.9.2/data/
+	outputString := "copy running-config " + ftp + host + "/" + host + " vrf management"
 	commandResult, err := session.Output(outputString)
 	if err != nil {
 		println(outputString)
@@ -204,7 +206,7 @@ func main() {
 	flag.Parse()
 
 	if *help {
-		fmt.Println("json:Name,Port,User,Password; file must be uncrypted only; the depth of backup unlim, control it; no run more then twice per day or not use flag -b")
+		fmt.Println("json:Name,Port,Ftp,User,Password; json:Ftp such as tftp://10.11.9.2/data/ ; file must be uncrypted only; the depth of backup unlim, control it; no run more then twice per day or not use flag -b")
 		return
 	}
 	// File encryption only
@@ -238,7 +240,7 @@ func main() {
 					log.Println(commutator.Name+" dircreation error: ", err)
 				}
 			}
-			out, err := invokeCmdSSH(commutator.Name, commutator.Port, commutator.User, commutator.Password)
+			out, err := invokeCmdSSH(commutator.Name, commutator.Port, commutator.Ftp, commutator.User, commutator.Password)
 			if err != nil {
 				log.Fatal(commutator.Name, err)
 			}
